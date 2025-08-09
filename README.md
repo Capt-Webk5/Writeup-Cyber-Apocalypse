@@ -1,4 +1,4 @@
-<img width="668" height="382" alt="image" src="https://github.com/user-attachments/assets/067f71e9-856f-47f5-9b72-45d68d9353c7" /># Writeup-Cyber-Apocalypse
+# Writeup-Cyber-Apocalypse
 <img width="668" height="402" alt="image" src="https://github.com/user-attachments/assets/b8d6d668-e7a4-4fba-bf88-aef16ebc8476" /> <br>
 ## Writeup 
 > Lưu ý: Đây là 1 sự kiện CTF cũ và tôi đã build lại cục bộ của mình để giải quyết và luyện tập về nó. <br>
